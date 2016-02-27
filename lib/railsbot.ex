@@ -1,15 +1,23 @@
 defmodule Railsbot do
-  use Summer.API
+  use Application
 
-  def handle_raw(conn, "376", _sender, _receiver, _message) do
-    conn |> Summer.Connection.join("#logga")
-  end
+  # See http://elixir-lang.org/docs/stable/elixir/Application.html
+  # for more information on OTP Applications
+  def start(_type, _args) do
+    import Supervisor.Spec, warn: false
+    IO.puts "Starting app"
+    {:ok, client} = ExIrc.start_client!
 
-  def handle_raw(_conn, _, _sender, _receiver, _message) do
-    # A raw that we don't care about.
-  end
+    children = [
+      # Define workers and child supervisors to be supervised
+      worker(Railsbot.ConnectionHandler, [client]),
+      worker(Railsbot.LoginHandler, [client, ["#logga"]]),
+      worker(Railsbot.Handler, [client])
+    ]
 
-  def handle_command(conn, %{ nick: nick, hostname: hostname }, receiver, "botsnack", _opts) do
-    conn |> Summer.Connection.privmsg(receiver, "Nom nom. Thanks, #{nick}!")
+    # See http://elixir-lang.org/docs/stable/elixir/Supervisor.html
+    # for other strategies and supported options
+    opts = [strategy: :one_for_one, name: OhaiIrc.Supervisor]
+    Supervisor.start_link(children, opts)
   end
 end
